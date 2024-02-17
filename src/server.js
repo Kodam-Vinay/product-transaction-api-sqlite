@@ -14,50 +14,47 @@ app.use(
 
 const db = await server(app);
 
-app.get("/store-to-db", async (req, res) => {
-  try {
-    db.run(
-      "CREATE TABLE IF NOT EXISTS transactions (id INT, title TEXT, price FLOAT,description TEXT, category VARCHAR(100), image TEXT, sold BOOLEAN, dateOfSale DATETIME)"
-    );
-    const response = await axios.get(
-      "https://s3.amazonaws.com/roxiler.com/product_transaction.json"
-    );
-    const data = response.data;
+const fetchAndInsert = async () => {
+  db.run(
+    "CREATE TABLE IF NOT EXISTS transactions (id INT, title TEXT, price FLOAT,description TEXT, category VARCHAR(100), image TEXT, sold BOOLEAN, dateOfSale DATETIME)"
+  );
+  const response = await axios.get(
+    "https://s3.amazonaws.com/roxiler.com/product_transaction.json"
+  );
+  const data = response.data;
 
-    if (data.length > 0) {
-      for (let item of data) {
-        const queryData = `SELECT id FROM transactions WHERE id = ${item?.id}`;
-        const existingData = await db.get(queryData);
-        if (existingData === undefined) {
-          const query = `
-       INSERT INTO transactions (id, title, price, description, category, image, sold, dateOfSale) 
-       VALUES (
-           ${item.id},
-           '${item.title.replace(/'/g, "''")}',
-           ${item.price},
-           '${item.description.replace(/'/g, "''")}',
-           '${item.category.replace(/'/g, "''")}',
-           '${item.image.replace(/'/g, "''")}',
-           ${item.sold},
-           '${item.dateOfSale.replace(/'/g, "''")}'
-       );
-    `;
-          await db.run(query);
-          res.status(201).send("Data Inserted Successfully");
-        }
-      }
+  for (let item of data) {
+    const queryData = `SELECT id FROM transactions WHERE id = ${item.id}`;
+    const existingData = await db.get(queryData);
+    if (existingData === undefined) {
+      const query = `
+   INSERT INTO transactions (id, title, price, description, category, image, sold, dateOfSale) 
+   VALUES (
+       ${item.id},
+       '${item.title.replace(/'/g, "''")}',
+       ${item.price},
+       '${item.description.replace(/'/g, "''")}',
+       '${item.category.replace(/'/g, "''")}',
+       '${item.image.replace(/'/g, "''")}',
+       ${item.sold},
+       '${item.dateOfSale.replace(/'/g, "''")}'
+   );
+`; /*The .replace(/'/g, "''") in the SQL query helps prevent SQL injection attacks by escaping single quotes.*/
+
+      await db.run(query);
     }
-  } catch (error) {
-    console.log(error);
   }
-});
+  console.log("Transactions added");
+};
+
+fetchAndInsert();
 
 app.get("/products", async (req, res) => {
   try {
     const query = `
     SELECT * FROM transactions
     `;
-    const response = await db.run(query);
+    const response = await db.all(query);
     res.status(200).send(response);
   } catch (error) {
     console.log(error);
@@ -74,7 +71,7 @@ app.get("/search", async (req, res) => {
       LIMIT ${limit}
       OFFSET ${skip}
     `;
-    const response = await db.run(query);
+    const response = await db.all(query);
     const dateFilter = response.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === month - 1
     );
@@ -96,7 +93,7 @@ app.get("/stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
     const query = `SELECT * FROM transactions`;
-    const response = await db.run(query);
+    const response = await db.all(query);
     const filterData = response?.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
     );
@@ -117,7 +114,7 @@ app.get("/price-range-stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
     const query = `SELECT * FROM transactions`;
-    const result = await db.run(query);
+    const result = await db.all(query);
     const zeroToHundread = result.filter(
       (each) =>
         new Date(each?.dateOfSale).getMonth() === monthNumber - 1 &&
@@ -198,7 +195,7 @@ app.get("/unique-category", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
     const query = `SELECT * FROM transactions`;
-    const response = await db.run(query);
+    const response = await db.all(query);
     const filterData = response.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
     );

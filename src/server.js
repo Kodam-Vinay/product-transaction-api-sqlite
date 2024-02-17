@@ -68,14 +68,13 @@ app.get("/search", async (req, res) => {
     const query = `
       SELECT *
       FROM transactions
+      WHERE strftime('%m', dateOfSale) = '${month > 9 ? month : "0" + month}' 
       LIMIT ${limit}
       OFFSET ${skip}
     `;
+
     const response = await db.all(query);
-    const dateFilter = response.filter(
-      (each) => new Date(each?.dateOfSale).getMonth() === month - 1
-    );
-    const filterData = dateFilter?.filter(
+    const filterData = response?.filter(
       (each) =>
         each?.title?.toLowerCase().includes(search_q?.toLowerCase()) ||
         each?.description?.toLowerCase().includes(search_q?.toLowerCase()) ||
@@ -92,13 +91,14 @@ app.get("/search", async (req, res) => {
 app.get("/stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM transactions`;
+    const query = `SELECT * 
+    FROM transactions
+    WHERE STRFTIME("%m", dateOfSale) = '${
+      monthNumber > 9 ? monthNumber : "0" + monthNumber
+    }'`;
     const response = await db.all(query);
-    const filterData = response?.filter(
-      (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
-    );
-    const soldItems = filterData.filter((each) => each?.sold === 1);
-    const unSoldItems = filterData.filter((each) => each?.sold === 0);
+    const soldItems = response?.filter((each) => each?.sold === 1);
+    const unSoldItems = response?.filter((each) => each?.sold === 0);
     const saleAmount = soldItems.reduce((cur, { price }) => cur + price, 0);
     res.status(200).send({
       totalSale: saleAmount,
@@ -113,67 +113,41 @@ app.get("/stats", async (req, res) => {
 app.get("/price-range-stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM transactions`;
+    const query = `SELECT * 
+    FROM transactions
+    WHERE STRFTIME("%m", dateOfSale) = '${
+      monthNumber > 9 ? monthNumber : "0" + monthNumber
+    }'
+    `;
     const result = await db.all(query);
-    const zeroToHundread = result.filter(
-      (each) =>
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1 &&
-        each?.price > 0 &&
-        each?.price <= 100
+    const zeroToHundread = result?.filter(
+      (each) => each?.price > 0 && each?.price <= 100
     );
-    const hundreadToTwoHundread = result.filter(
-      (each) =>
-        each?.price > 100 &&
-        each?.price <= 200 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const hundreadToTwoHundread = result?.filter(
+      (each) => each?.price > 100 && each?.price <= 200
     );
-    const twoHundreadToThreeHundread = result.filter(
-      (each) =>
-        each?.price > 200 &&
-        each?.price <= 300 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const twoHundreadToThreeHundread = result?.filter(
+      (each) => each?.price > 200 && each?.price <= 300
     );
-    const threeHundreadToFourHundread = result.filter(
-      (each) =>
-        each?.price > 300 &&
-        each?.price <= 400 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const threeHundreadToFourHundread = result?.filter(
+      (each) => each?.price > 300 && each?.price <= 400
     );
-    const fourHundreadToFiveHundread = result.filter(
-      (each) =>
-        each?.price > 400 &&
-        each?.price <= 500 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const fourHundreadToFiveHundread = result?.filter(
+      (each) => each?.price > 400 && each?.price <= 500
     );
-    const fiveHundreadToSixHundread = result.filter(
-      (each) =>
-        each?.price > 500 &&
-        each?.price <= 600 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const fiveHundreadToSixHundread = result?.filter(
+      (each) => each?.price > 500 && each?.price <= 600
     );
-    const sixHundreadToSevenHundread = result.filter(
-      (each) =>
-        each?.price > 600 &&
-        each?.price <= 700 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const sixHundreadToSevenHundread = result?.filter(
+      (each) => each?.price > 600 && each?.price <= 700
     );
-    const sevenHundreadToEightHundread = result.filter(
-      (each) =>
-        each?.price > 700 &&
-        each?.price <= 800 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const sevenHundreadToEightHundread = result?.filter(
+      (each) => each?.price > 700 && each?.price <= 800
     );
-    const eightHundreadToNineHundread = result.filter(
-      (each) =>
-        each?.price > 800 &&
-        each?.price <= 900 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
+    const eightHundreadToNineHundread = result?.filter(
+      (each) => each?.price > 800 && each?.price <= 900
     );
-    const aboveNineHundread = result.filter(
-      (each) =>
-        each?.price > 900 &&
-        new Date(each?.dateOfSale).getMonth() === monthNumber - 1
-    );
+    const aboveNineHundread = result?.filter((each) => each?.price > 900);
     res.status(200).send([
       { name: "0-100", value: zeroToHundread?.length },
       { name: "101-200", value: hundreadToTwoHundread?.length },
@@ -194,13 +168,15 @@ app.get("/price-range-stats", async (req, res) => {
 app.get("/unique-category", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM transactions`;
+    const query = `
+    SELECT * 
+    FROM transactions
+    WHERE STRFTIME("%m", dateOfSale) = '${
+      monthNumber > 9 ? monthNumber : "0" + monthNumber
+    }'`;
     const response = await db.all(query);
-    const filterData = response.filter(
-      (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
-    );
     let uniqueCategories = {};
-    filterData.map((each) => {
+    response?.map((each) => {
       if (!uniqueCategories.hasOwnProperty(each?.category)) {
         uniqueCategories[each?.category] = 1;
       } else {

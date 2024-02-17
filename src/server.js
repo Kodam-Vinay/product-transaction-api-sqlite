@@ -1,7 +1,7 @@
 import express from "express";
 import { server } from "./connection.js";
-import sqlite3 from "sqlite3";
 import cors from "cors";
+import axios from "axios";
 
 const app = express();
 app.use(express.json());
@@ -17,32 +17,36 @@ const db = await server(app);
 app.get("/store-to-db", async (req, res) => {
   try {
     db.run(
-      "CREATE TABLE IF NOT EXISTS products (title TEXT, price FLOAT,description TEXT, category VARCHAR(100), image TEXT, sold BOOLEAN, dateOfSale DATETIME)"
+      "CREATE TABLE IF NOT EXISTS transactions (id INT, title TEXT, price FLOAT,description TEXT, category VARCHAR(100), image TEXT, sold BOOLEAN, dateOfSale DATETIME)"
     );
-    const response = await fetch(
+    const response = await axios.get(
       "https://s3.amazonaws.com/roxiler.com/product_transaction.json"
     );
-    const data = await response.json();
+    const data = response.data;
 
-    const placeholders = data.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
-    const sql = `INSERT INTO products (title , price ,description , category , image , sold , dateOfSale ) VALUES ${placeholders}`;
-    const values = data.flatMap((each) => [
-      each?.id,
-      each?.title,
-      each?.price,
-      each?.description,
-      each?.category,
-      each?.image,
-      each?.sold,
-      each?.dateOfSale,
-    ]);
-
-    await db.run(sql, values, function (err) {
-      if (err) {
-        return console.error(err.message);
+    if (data.length > 0) {
+      for (let item of data) {
+        const queryData = `SELECT id FROM transactions WHERE id = ${item?.id}`;
+        const existingData = await db.get(queryData);
+        if (existingData === undefined) {
+          const query = `
+       INSERT INTO transactions (id, title, price, description, category, image, sold, dateOfSale) 
+       VALUES (
+           ${item.id},
+           '${item.title.replace(/'/g, "''")}',
+           ${item.price},
+           '${item.description.replace(/'/g, "''")}',
+           '${item.category.replace(/'/g, "''")}',
+           '${item.image.replace(/'/g, "''")}',
+           ${item.sold},
+           '${item.dateOfSale.replace(/'/g, "''")}'
+       );
+    `;
+          await db.run(query);
+          res.status(201).send("Data Inserted Successfully");
+        }
       }
-      console.log(`Inserted ${this.changes} rows with last ID ${this.lastID}`);
-    });
+    }
   } catch (error) {
     console.log(error);
   }
@@ -51,9 +55,9 @@ app.get("/store-to-db", async (req, res) => {
 app.get("/products", async (req, res) => {
   try {
     const query = `
-    SELECT * FROM products
+    SELECT * FROM transactions
     `;
-    const response = await db.all(query);
+    const response = await db.run(query);
     res.status(200).send(response);
   } catch (error) {
     console.log(error);
@@ -66,11 +70,11 @@ app.get("/search", async (req, res) => {
     const skip = (page - 1) * limit;
     const query = `
       SELECT *
-      FROM products
+      FROM transactions
       LIMIT ${limit}
       OFFSET ${skip}
     `;
-    const response = await db.all(query);
+    const response = await db.run(query);
     const dateFilter = response.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === month - 1
     );
@@ -91,8 +95,8 @@ app.get("/search", async (req, res) => {
 app.get("/stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM products`;
-    const response = await db.all(query);
+    const query = `SELECT * FROM transactions`;
+    const response = await db.run(query);
     const filterData = response?.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
     );
@@ -112,8 +116,8 @@ app.get("/stats", async (req, res) => {
 app.get("/price-range-stats", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM products`;
-    const result = await db.all(query);
+    const query = `SELECT * FROM transactions`;
+    const result = await db.run(query);
     const zeroToHundread = result.filter(
       (each) =>
         new Date(each?.dateOfSale).getMonth() === monthNumber - 1 &&
@@ -193,8 +197,8 @@ app.get("/price-range-stats", async (req, res) => {
 app.get("/unique-category", async (req, res) => {
   try {
     const monthNumber = req.query.month || 3;
-    const query = `SELECT * FROM products`;
-    const response = await db.all(query);
+    const query = `SELECT * FROM transactions`;
+    const response = await db.run(query);
     const filterData = response.filter(
       (each) => new Date(each?.dateOfSale).getMonth() === monthNumber - 1
     );
